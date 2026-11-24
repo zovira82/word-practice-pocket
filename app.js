@@ -126,42 +126,22 @@
     </div>`;
   }
   function quizShell() {
-    return `${headings('客观题练习','2020—2025 年区域赛 · Word 科目')}
-    <div class="split">
-      <section class="paper" aria-label="练习题">
+    return `<h1 class="sr-only">客观题练习</h1>
+      <section class="paper practice-page" aria-label="练习题">
         <div class="quiz-header">
           <div class="quiz-top">
             ${segment('mode','memory','practice',state.mode,['背题','刷题'])}
             <span class="spacer"></span>
-            <span class="sheet-progress" id="counter"></span>
-            ${button('map','▦','icon-button','aria-label="打开答题卡"')}
-          </div>
-          <div class="filters">
-            ${select('year','年份',[['all','全部年份'],...years.map(y=>[y,y+' 年'])],state.year)}
-            ${select('kind','题型',[['all','全部题型'],...optionsFor(['单选','不定项','判断'])],state.kind)}
-            ${select('order','练习顺序',[['original','原卷顺序'],['random','随机'],['wrong','错题'],['stars','收藏']],state.order)}
-            ${select('topic','知识点',[['all','知识点'],...optionsFor(Object.keys(topics))],state.topic)}
+            ${button('map','<span id="counter"></span><span aria-hidden="true">▦</span>','button secondary sheet-progress','aria-label="打开答题卡"')}
           </div>
           ${progress(0,'题目位置')}
         </div>
         <div class="stage" id="stage"></div>
         <div class="foot">
           ${button('prev','‹ 上一题')}
-          ${button('notebook','笔记','link-button')}
           ${button('next','下一题 ›','button')}
         </div>
-      </section>
-      <aside class="quiz-side">
-        <section class="side" id="quiz-progress"></section>
-        <section class="side sample">
-          <img src="assets/2025-invite/reference-1.jpg" alt="2025 年研发部邀请函参考效果">
-          <div class="sample-body">
-            <h2>研发部邀请函</h2><p>2025 年操作题 · ${operations.at(-1).steps.length} 个练习步骤</p>
-            ${button('open-case','查看分步练习','link-button','data-id="2025-invite"')}
-          </div>
-        </section>
-      </aside>
-    </div>`;
+      </section>`;
   }
   function renderQuizQuestion(direction = 0, reveal = false) {
     const question = queue[current];
@@ -176,17 +156,11 @@
     bar.setAttribute('aria-valuenow',Math.round(ratio*100));
     next.disabled = !question || current === queue.length - 1;
     prev.disabled = !question || current === 0;
-    const stats = queue.reduce((acc,q) => {
-      if (state.seen[q.id]) acc.seen++;
-      if (state.wrong[dedupKey(q)]) acc.wrong++;
-      return acc;
-    }, {seen:0,wrong:0});
-    document.getElementById('quiz-progress').innerHTML = `<h2>当前范围</h2><div class="stat-line"><span>已练习</span><strong>${stats.seen} / ${queue.length}</strong></div><div class="stat-line"><span>待复习错题</span><strong>${stats.wrong}</strong></div>${button('review','复习错题','link-button')}`;
+    counter.parentElement.disabled = !question;
     if (!question) {
       stage.innerHTML = `<div class="empty"><h2>当前范围没有题目</h2><p>可以换一个年份、题型或练习顺序。</p>${button('reset-filter','查看全部题目','button')}</div>`;
       return;
     }
-    const key = dedupKey(question);
     const grading = state.mode === 'memory' || result !== null;
     const topic = topicFor(question);
     const expanded = explanationFor(question);
@@ -202,20 +176,26 @@
         `choice ${grade}`,`data-value="${id}" aria-pressed="${checked}" ${grading?'disabled':''}`);
     }).join('');
     stage.innerHTML = `<article class="question" data-id="${question.id}">
-      <div class="question-meta"><span class="badge">${question.kind}</span><span>${question.year} 年 · 原卷第 ${question.number} 题</span><span class="spacer"></span>
-      ${button('favorite',state.stars[key]?'★':'☆',`icon-button ${state.stars[key]?'saved':''}`,`aria-label="收藏本题" aria-pressed="${!!state.stars[key]}"`)}</div>
+      <div class="question-meta"><span class="badge">${question.kind}</span><span>${question.year} 年 · 原卷第 ${question.number} 题</span></div>
       <h2>${esc(question.stem)}</h2>
-      <div class="options" role="group" aria-label="答案选项">${choices}</div>
       ${grading?`<div class="feedback ${result?.correct?'correct':result?'wrong':''}" aria-live="polite">
         <strong class="score">${result?(result.correct?'✓ 答对了':'× 答错了 · 正确答案 '+correctLabels):'参考答案 '+correctLabels}</strong>
-        ${expanded?`<p>${esc(expanded)}</p>`:`<p>${esc(question.answer.map(id=>question.options[id]).join('、'))}</p>`}
-        ${button('topic',topic,'link-button',`data-value="${topic}"`)}
-      </div>`:question.kind==='不定项'?`<div class="submit-wrap"><span>可选一项或多项</span>${button('submit','确认答案','button',selection.length?'':'disabled')}</div>`:''}
+        ${expanded?`<p>${esc(expanded)}</p>`:question.kind!=='判断'?`<p>${esc(question.answer.map(id=>question.options[id]).join('、'))}</p>`:''}
+        ${button('topic',topic+' ›','link-button feedback-topic',`data-value="${topic}"`)}
+      </div>`:''}
+      <div class="options" role="group" aria-label="答案选项">${choices}</div>
+      ${!grading && question.kind==='不定项'?`<div class="submit-wrap"><span>可选一项或多项</span>${button('submit','确认答案','button',selection.length?'':'disabled')}</div>`:''}
     </article>`;
     if (direction) animate(stage.querySelector('.question'), [
       { transform:`translateX(${direction * 24}px)`, opacity:.55 },{ transform:'translateX(0)',opacity:1 }
     ]);
-    if (reveal) animate(stage.querySelector('.feedback'), [{transform:'translateY(-6px)',opacity:.35},{transform:'translateY(0)',opacity:1}],145);
+    if (reveal) revealFeedback(stage.querySelector('.feedback'));
+  }
+  function revealFeedback(feedback) {
+    if (!feedback) return;
+    animate(feedback,[{transform:'translateY(-5px)',opacity:.35},{transform:'translateY(0)',opacity:1}],145);
+    const {top,bottom}=feedback.getBoundingClientRect();
+    if (top<0 || bottom>window.innerHeight-48) feedback.scrollIntoView({block:'nearest',behavior:motion.matches?'instant':'smooth'});
   }
   function move(index) {
     if (index < 0 || index >= queue.length || index === current) return;
@@ -258,55 +238,45 @@
   }
   function operationView() {
     const op=activeCase();
-    const index=currentStep(op);
-    const steps=op.steps.map(([name],i)=>{
-      const mark=stepStatus(op,i);
-      return button('step',`<span class="step-index ${mark}">${mark==='done'?'✓':mark==='review'?'↺':i+1}</span><span>${esc(name)}</span>`,'step-link',`data-index="${i}" ${i===index?'aria-current="step"':''}`);
-    }).join('');
-    return `${headings('Word 操作题','7 套区域赛原题 · 原始素材与参考成品')}
-      <div class="split">
-        <section class="paper operations-detail">
+    return `<h1 class="sr-only">Word 操作题</h1>
+        <section class="paper practice-page operations-detail">
           <div class="op-top">
-            ${segment('op-mode','steps','full',state.opMode,['网页练步骤','电脑版 Word 实操'])}
+            ${segment('op-mode','steps','full',state.opMode,['分步练','Word 实操'])}
             ${select('case','选择操作题',operations.slice().reverse().map(item=>[item.id,item.year+' '+item.title]),op.id,'select')}
           </div>
           <div id="operation-content">${state.opMode==='steps'?stepContent(op):fullContent(op)}</div>
-        </section>
-        <aside>${state.opMode==='steps'?`<section class="side"><div class="case-side-head"><h2>本套步骤</h2><p>${op.steps.filter((_,i)=>stepStatus(op,i)==='done').length} / ${op.steps.length}</p></div><div class="step-links">${steps}</div></section>`:''}
-          <section class="side"><h2>参考效果</h2>${references(op)}</section>
-        </aside>
-      </div>`;
+        </section>`;
   }
   function stepContent(op) {
     const i=currentStep(op);
     const [title,requirement,path,why,check]=op.steps[i];
     const mark=stepStatus(op,i);
     const recall=window.WORD_RECALL.find(([pattern])=>pattern.test(path))?.[1];
-    return `<div class="question-meta"><span class="badge">${op.year} 年</span><span>第 ${i+1} 步，共 ${op.steps.length} 步</span></div>
+    return `<div class="question-meta">${button('step-map',`第 ${i+1} / ${op.steps.length} 步 <span aria-hidden="true">▦</span>`,'button secondary compact','aria-label="打开步骤目录"')}</div>
       <h2 class="op-title">${esc(title)}</h2>
-      <p class="operation-prompt">${esc(requirement)}</p>
       ${recall?recallContent(recall):''}
       <details class="step-detail" id="tutorial" ${tutorialOpen?'open':''}>
-        <summary>查看 Word 操作步骤</summary>
+        <summary>操作路径与原题</summary>
         <div class="step-body">
-          <p><strong>怎么操作</strong>　${esc(path)}</p>
-          <p><strong>为什么这样做</strong>　${esc(why)}</p>
-          <p><strong>做完怎么检查</strong>　${esc(check)}</p>
+          <p><strong>操作</strong>　${esc(path)}</p>
+          <p><strong>原因</strong>　${esc(why)}</p>
+          <p><strong>检查</strong>　${esc(check)}</p>
+          <p class="operation-prompt">${esc(requirement)}</p>
         </div>
       </details>
       <div class="step-actions">
-        ${button('mark-review','需要重练','button secondary',`aria-pressed="${mark==='review'}"`)}
-        ${button('mark-done','能说出步骤',mark==='done'?'button secondary':'button',`aria-pressed="${mark==='done'}"`)}
-        <span class="spacer"></span>
         ${button('step-prev','‹ 上一步','button secondary',i===0?'disabled':'')}
-        ${button('step-next','下一步 ›','button secondary',i===op.steps.length-1?'disabled':'')}
+        ${button('step-mark',mark==='done'?'已掌握':mark==='review'?'待重练':'标记','link-button')}
+        ${button('step-next','下一步 ›','button',i===op.steps.length-1?'disabled':'')}
       </div>`;
   }
   function recallContent([question,choices,correct,why]) {
-    return `<section class="recall"><h3>练一下</h3><p>${esc(question)}</p>${choices.map((choice,i)=>{
+    return `<section class="recall" aria-label="分步练习"><p>${esc(question)}</p>
+    ${recallChoice!==null?`<p class="feedback ${recallChoice===correct?'correct':'wrong'}" role="status"><strong>${recallChoice===correct?'选对了':'正确做法'}</strong>　${esc(why)}</p>`:''}
+    ${choices.map((choice,i)=>{
       const grade=recallChoice!==null && i===correct?'correct':recallChoice===i?'wrong':'';
       return button('recall',`${esc(choice)}${grade?`<span class="result-icon">${grade==='correct'?'✓':'×'}</span>`:''}`,`choice ${grade}`,`data-index="${i}" aria-pressed="${recallChoice===i}"`);
-    }).join('')}${recallChoice!==null?`<p class="feedback ${recallChoice===correct?'correct':'wrong'}" role="status"><strong>${recallChoice===correct?'选对了':'正确做法'}</strong>　${esc(why)}</p>`:''}</section>`;
+    }).join('')}</section>`;
   }
   function elapsed(op) {
     const timer=state.timers[op.id];
@@ -322,19 +292,30 @@
   function fullContent(op) {
     const checklist=state.checklists[op.id] || [];
     const active=!!state.timers[op.id]?.started;
-    return `<div class="question-meta"><span class="badge">${op.year} 年</span><span>整套实操</span></div>
-      <h2 class="op-title">${esc(op.title)}</h2>
-      <p>用桌面版 Word 打开练习文档，旁边保留本页看题。含插图的题需要下载完整素材包。完成后另存为 <strong>${esc(op.filename)}</strong>。</p>
-      <div class="actions">
-        <a class="button" href="${asset(op,'starter.docx')}" download="${esc(op.title)}-练习文档.docx">下载 Word 练习文档</a>
-        <a class="button secondary" href="${asset(op,'practice.zip')}" download="${esc(op.title)}-练习素材.zip">下载完整素材包</a>
-        <span class="spacer"></span><output class="clock" id="clock" aria-label="练习用时">00:00</output>${button('timer',active?'暂停计时':'开始计时')}
+    return `<div class="practical-bar">
+        <a class="button" href="${asset(op,'practice.zip')}" download="${esc(op.title)}-练习素材.zip">下载整套素材</a>
+        <button type="button" class="button secondary timer-button" data-action="timer">
+          <span id="clock" class="clock">00:00</span><span data-timer-label>${active?'暂停':'计时'}</span>
+        </button>
       </div>
-      <details class="step-detail" open><summary>原题要求</summary><p class="operation-prompt">${esc(op.intro)}</p><ul class="full-list">${op.requirements.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>
-      <details class="step-detail"><summary>完成后自查 <span id="checked-count">${checklist.filter(Boolean).length} / ${op.steps.length}</span></summary>
-        <div class="check-list">${op.steps.map(([title,, , , check],i)=>`<label><input type="checkbox" name="check" value="${i}" ${checklist[i]?'checked':''}><span><strong>${esc(title)}</strong>　${esc(check)}</span></label>`).join('')}</div>
-        <div class="actions"><a class="button secondary" href="${asset(op,'answer.docx')}" download="${esc(op.filename)}">下载参考成品</a>
-        ${op.rubric?`<a class="button secondary" href="${asset(op,'rubric.docx')}" download="${esc(op.title)}-评分说明.docx">下载原评分说明</a>`:'<p>自查依据为原题要求与参考成品。</p>'}</div>
+      <p class="file-instruction">用电脑 Word 操作，另存为 <strong>${esc(op.filename)}</strong></p>
+      <div class="task-heading"><h2>实操清单</h2><span id="checked-count">${checklist.filter(Boolean).length} / ${op.steps.length}</span></div>
+      <div class="check-list">${op.steps.map(([title,requirement,,,check],i)=>`
+        <div class="task-row">
+          <input type="checkbox" name="check" value="${i}" aria-label="完成 ${esc(title)}" ${checklist[i]?'checked':''}>
+          <details>
+            <summary>${esc(title)}</summary>
+            <p>${esc(requirement)}</p>
+            <p><strong>自查</strong>　${esc(check)}</p>
+          </details>
+        </div>`).join('')}</div>
+      <details class="step-detail"><summary>整卷原题</summary><p class="operation-prompt">${esc(op.intro)}</p><ul class="full-list">${op.requirements.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>
+      <details class="step-detail"><summary>单独下载与参考</summary>
+        <div class="reference-files">
+          <a href="${asset(op,'starter.docx')}" download="${esc(op.title)}-练习文档.docx">Word 练习文档</a>
+          <a href="${asset(op,'answer.docx')}" download="${esc(op.filename)}">参考成品</a>
+          ${op.rubric?`<a href="${asset(op,'rubric.docx')}" download="${esc(op.title)}-评分说明.docx">原评分说明</a>`:''}
+        </div>${references(op)}
       </details>`;
   }
   function knowledgeView() {
@@ -366,7 +347,30 @@
     if (!dialog.open) dialog.showModal();
   }
   function showMap() {
-    openDialog('答题卡',`<p>选择练习中的题号跳转。</p><div class="dialog-scroll"><div class="answer-grid">${queue.map((q,i)=>button('jump',i+1,state.wrong[dedupKey(q)]?'no':state.seen[q.id]?'ok':'',`data-index="${i}" aria-label="跳至第 ${i+1} 题" ${i===current?'aria-current="true"':''}`)).join('')}</div></div>`);
+    openDialog('答题卡',`<div class="dialog-scroll"><div class="answer-grid">${queue.map((q,i)=>button('jump',i+1,state.wrong[dedupKey(q)]?'no':state.seen[q.id]?'ok':'',`data-index="${i}" aria-label="跳至第 ${i+1} 题" ${i===current?'aria-current="true"':''}`)).join('')}</div></div>`);
+  }
+  function showSettings() {
+    const question=route==='quiz'?queue[current]:null;
+    const starred=question && !!state.stars[dedupKey(question)];
+    const fields=route==='quiz'?`<div class="filters">
+      <label>年份${select('year','年份',[['all','全部年份'],...years.map(y=>[y,y+' 年'])],state.year)}</label>
+      <label>题型${select('kind','题型',[['all','全部题型'],...optionsFor(['单选','不定项','判断'])],state.kind)}</label>
+      <label>顺序${select('order','练习顺序',[['original','原卷顺序'],['random','随机'],['wrong','错题'],['stars','收藏']],state.order)}</label>
+      <label>知识点${select('topic','知识点',[['all','全部知识点'],...optionsFor(Object.keys(topics))],state.topic)}</label>
+    </div>`:'';
+    openDialog('练习设置',`${fields}<div class="settings-actions">
+      ${question?button('favorite',starred?'取消收藏':'收藏本题','button secondary',`aria-pressed="${starred}"`):''}
+      ${button('notebook','学习笔记','button secondary')}
+      ${button('record','学习记录','button secondary')}
+    </div>`);
+  }
+  function showStepMap() {
+    const op=activeCase();
+    const steps=op.steps.map(([name],i)=>{
+      const mark=stepStatus(op,i);
+      return button('step',`<span class="step-index ${mark}">${mark==='done'?'✓':mark==='review'?'↺':i+1}</span><span>${esc(name)}</span>`,'step-link',`data-index="${i}" ${i===currentStep(op)?'aria-current="step"':''}`);
+    });
+    openDialog('步骤目录',`<div class="step-links">${steps.join('')}</div>`);
   }
   function showRecord() {
     const practiced=Object.keys(state.seen).length;
@@ -428,15 +432,22 @@
         } else { selection=[value]; grade(); }
         break;
       case 'submit': grade(); break;
+      case 'settings': showSettings(); break;
       case 'favorite': {
-        clearTimeout(advanceTimer);
+        if (!queue[current]) return;
         const key=dedupKey(queue[current]);
         if(state.stars[key])delete state.stars[key];else state.stars[key]=true;
+        if(state.order==='stars' && !state.stars[key]){
+          selection=[];
+          result=null;
+          refreshQueue();
+          renderQuizQuestion();
+          showSettings();
+        } else {
+          target.setAttribute('aria-pressed',String(!!state.stars[key]));
+          target.textContent=state.stars[key]?'取消收藏':'收藏本题';
+        }
         save();
-        target.classList.toggle('saved',!!state.stars[key]);
-        target.setAttribute('aria-pressed',String(!!state.stars[key]));
-        target.textContent=state.stars[key]?'★':'☆';
-        say(state.stars[key]?'已收藏':'已取消收藏');
         break;
       }
       case 'map': showMap(); break;
@@ -473,15 +484,26 @@
         render();
         animate(document.getElementById('operation-content'),[{opacity:.5},{opacity:1}]);
         break;
-      case 'step': moveStep(index); break;
+      case 'step-map': showStepMap(); break;
+      case 'step': dialog.close(); moveStep(index); break;
       case 'step-prev': moveStep(currentStep(activeCase())-1); break;
       case 'step-next': moveStep(currentStep(activeCase())+1); break;
+      case 'step-mark': {
+        const op=activeCase();
+        const mark=stepStatus(op,currentStep(op));
+        openDialog('标记这一步',`<div class="settings-actions">
+          ${button('mark-done','已掌握','button',`aria-pressed="${mark==='done'}"`)}
+          ${button('mark-review','待重练','button secondary',`aria-pressed="${mark==='review'}"`)}
+        </div>`);
+        break;
+      }
       case 'mark-review':
       case 'mark-done': {
         const op=activeCase();
         const i=currentStep(op);
         const mark=action==='mark-done'?'done':'review';
         state.mastered[op.id+'-'+i]=mark;
+        dialog.close();
         save();
         say(mark==='done'?'已记下：能说出步骤':'已标记需要重练');
         if(mark==='done'&&i<op.steps.length-1) moveStep(i+1);
@@ -493,7 +515,7 @@
         const content=document.getElementById('operation-content');
         content.innerHTML=stepContent(activeCase());
         content.querySelector(`[data-action=recall][data-index="${index}"]`)?.focus({preventScroll:true});
-        animate(content.querySelector('.recall .feedback'),[{opacity:.25},{opacity:1}],150);
+        revealFeedback(content.querySelector('.recall .feedback'));
         break;
       }
       case 'timer': {
@@ -502,7 +524,7 @@
         if(timer.started){timer.accumulated=elapsed(op);timer.started=0;}
         else timer.started=Date.now();
         save();
-        target.textContent=timer.started?'暂停计时':'继续计时';
+        target.querySelector('[data-timer-label]').textContent=timer.started?'暂停':'继续';
         updateClock();
         break;
       }
@@ -525,6 +547,8 @@
       refreshQueue(false);
       save();
       renderQuizQuestion(0);
+      showSettings();
+      dialog.querySelector(`select[name="${input.name}"]`)?.focus({preventScroll:true});
     } else if(input.name==='case' && route==='operations'){
       state.caseId=input.value;
       tutorialOpen=false;
