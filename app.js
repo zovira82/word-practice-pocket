@@ -1,6 +1,10 @@
 (() => {
   'use strict';
-  const { questions, operations } = window.WORD_DATA;
+  const { questions: sourceQuestions, operations } = window.WORD_DATA;
+  const questions = sourceQuestions.map(question => {
+    const correction = window.WORD_ANSWER_CORRECTIONS[question.id];
+    return correction ? { ...question, originalAnswer: question.answer, ...correction } : question;
+  });
   const topics = window.WORD_TOPICS;
   const ids = new Map(questions.map(q => [q.id, q]));
   const years = [...new Set(questions.map(q => q.year))].reverse();
@@ -55,14 +59,13 @@
     return exact.find(key => topics[key][0].test(question.stem)) || '文件与视图';
   }
   function explanationFor(question) {
-    const answer = question.answer.map(id => question.options[id]).join('、');
-    return window.WORD_EXPLANATIONS.find(([stem, correct]) => stem.test(question.stem) && correct.test(answer))?.[2];
+    return window.WORD_EXPLANATIONS[question.id];
   }
   function dedupKey(question) {
     const clean = str => str.normalize('NFKC').toLowerCase().replace(/[\s_。．，（）()]/g, '');
     return JSON.stringify([
       clean(question.stem), Object.values(question.options).map(clean).sort(),
-      question.answer.map(id => clean(question.options[id])).sort()
+      (question.originalAnswer || question.answer).map(id => clean(question.options[id])).sort()
     ]);
   }
   function refreshQueue(keepPosition = true) {
@@ -168,7 +171,7 @@
     const expanded = explanationFor(question);
     const correctLabels = question.kind === '判断'
       ? question.options[question.answer[0]]
-      : question.answer.join('、');
+      : question.answer.join(question.anyAnswer?' 或 ':'、');
     const choices = Object.entries(question.options).map(([id,label])=>{
       const checked = !memory && selection.includes(id);
       const correct = question.answer.includes(id);
@@ -214,7 +217,9 @@
   function grade() {
     const question=queue[current];
     if (!question || !selection.length || result) return;
-    const correct=selection.length===question.answer.length && selection.every(id=>question.answer.includes(id));
+    const correct=question.anyAnswer
+      ? question.answer.includes(selection[0])
+      : selection.length===question.answer.length && selection.every(id=>question.answer.includes(id));
     const key=dedupKey(question);
     state.attempts[question.id]=(state.attempts[question.id]||0)+1;
     state.seen[question.id]=true;
