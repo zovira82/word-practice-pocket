@@ -161,14 +161,16 @@
       stage.innerHTML = `<div class="empty"><h2>当前范围没有题目</h2><p>可以换一个年份、题型或练习顺序。</p>${button('reset-filter','查看全部题目','button')}</div>`;
       return;
     }
-    const grading = state.mode === 'memory' || result !== null;
+    const memory = state.mode === 'memory';
+    const attempt = memory ? null : result;
+    const grading = memory || attempt !== null;
     const topic = topicFor(question);
     const expanded = explanationFor(question);
     const correctLabels = question.kind === '判断'
       ? question.options[question.answer[0]]
       : question.answer.join('、');
     const choices = Object.entries(question.options).map(([id,label])=>{
-      const checked = selection.includes(id);
+      const checked = !memory && selection.includes(id);
       const correct = question.answer.includes(id);
       const grade = grading ? (correct?'correct':checked?'wrong':'') : '';
       const indicator = grade ? `<span class="result-icon" aria-label="${correct?'正确选项':'选错'}">${correct?'✓':'×'}</span>` : '';
@@ -178,8 +180,8 @@
     stage.innerHTML = `<article class="question" data-id="${question.id}">
       <div class="question-meta"><span class="badge">${question.kind}</span><span>${question.year} 年 · 原卷第 ${question.number} 题</span></div>
       <h2>${esc(question.stem)}</h2>
-      ${grading?`<div class="feedback ${result?.correct?'correct':result?'wrong':''}" aria-live="polite">
-        <strong class="score">${result?(result.correct?'✓ 答对了':'× 答错了 · 正确答案 '+correctLabels):'参考答案 '+correctLabels}</strong>
+      ${grading?`<div class="feedback ${attempt?.correct?'correct':attempt?'wrong':''}" aria-live="polite">
+        <strong class="score">${attempt?(attempt.correct?'✓ 答对了':'× 答错了 · 正确答案 '+correctLabels):'参考答案 '+correctLabels}</strong>
         ${expanded?`<p>${esc(expanded)}</p>`:question.kind!=='判断'?`<p>${esc(question.answer.map(id=>question.options[id]).join('、'))}</p>`:''}
         ${button('topic',topic+' ›','link-button feedback-topic',`data-value="${topic}"`)}
       </div>`:''}
